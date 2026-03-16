@@ -16,6 +16,11 @@ class CustomerAuthenticated
             return redirect()->route('account.customer.login');
         }
 
+        // If user has 2FA pending verification, don't allow portal access
+        if ($request->session()->has('2fa_user_id')) {
+            return redirect()->route('account.customer.2fa.verify');
+        }
+
         return $next($request);
     }
 }

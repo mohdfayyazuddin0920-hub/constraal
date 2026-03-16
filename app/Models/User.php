@@ -18,6 +18,9 @@ class User extends Authenticatable
         'phone',
         'profile_picture',
         'two_factor_enabled',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'two_factor_confirmed_at',
         'is_active',
         'notify_billing',
         'notify_security',
@@ -32,11 +35,13 @@ class User extends Authenticatable
         'allow_marketing',
     ];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'];
 
     protected $casts = [
         'email_verified_at' => 'datetime',
         'two_factor_enabled' => 'boolean',
+        'two_factor_confirmed_at' => 'datetime',
+        'two_factor_recovery_codes' => 'array',
         'is_active' => 'boolean',
         'notify_billing' => 'boolean',
         'notify_security' => 'boolean',

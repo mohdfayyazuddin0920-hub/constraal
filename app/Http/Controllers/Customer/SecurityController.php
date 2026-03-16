@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\TwoFactorAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class SecurityController extends Controller
 {
@@ -26,7 +28,7 @@ class SecurityController extends Controller
         return view('customer.security.index', [
             'user' => $user,
             'loginActivity' => $loginActivity,
-            'twoFactorEnabled' => $user->two_factor_enabled ?? false,
+            'twoFactorEnabled' => $user->two_factor_enabled && $user->two_factor_confirmed_at,
         ]);
     }
 
@@ -51,11 +53,11 @@ class SecurityController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $user->password)) {
+        if (!Hash::check($request->current_password, $user->password)) {
             return back()->withErrors(['current_password' => 'Current password is incorrect']);
         }
 
-        $user->update(['password' => \Illuminate\Support\Facades\Hash::make($request->password)]);
+        $user->update(['password' => Hash::make($request->password)]);
 
         $user->activities()->create([
             'action' => 'password_changed',
@@ -68,13 +70,63 @@ class SecurityController extends Controller
     }
 
     /**
-     * Enable Two-Factor Authentication
+     * Show two-factor setup page with QR code
      */
-    public function enableTwoFactor(Request $request)
+    public function showTwoFactorSetup(Request $request)
     {
         /** @var User $user */
         $user = Auth::user();
-        $user->update(['two_factor_enabled' => true]);
+
+        // Generate a new secret
+        $secret = TwoFactorAuth::generateSecret();
+        $qrUri = TwoFactorAuth::getQrUri($secret, $user->email);
+        $recoveryCodes = TwoFactorAuth::generateRecoveryCodes();
+
+        // Store temporarily in session until user confirms
+        $request->session()->put('2fa_setup_secret', $secret);
+        $request->session()->put('2fa_setup_recovery_codes', $recoveryCodes);
+
+        return view('customer.security.two-factor-setup', [
+            'secret' => $secret,
+            'qrUri' => $qrUri,
+            'recoveryCodes' => $recoveryCodes,
+        ]);
+    }
+
+    /**
+     * Enable Two-Factor Authentication after code verification
+     */
+    public function enableTwoFactor(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string|size:6',
+        ]);
+
+        /** @var User $user */
+        $user = Auth::user();
+
+        $secret = $request->session()->get('2fa_setup_secret');
+        $recoveryCodes = $request->session()->get('2fa_setup_recovery_codes');
+
+        if (!$secret) {
+            return redirect()->route('account.customer.security.2fa-setup')
+                ->with('error', 'Setup session expired. Please try again.');
+        }
+
+        // Verify the code against the secret
+        if (!TwoFactorAuth::verify($secret, $request->code)) {
+            return back()->with('error', 'Invalid verification code. Please try again.');
+        }
+
+        // Save 2FA settings
+        $user->update([
+            'two_factor_enabled' => true,
+            'two_factor_secret' => $secret,
+            'two_factor_recovery_codes' => $recoveryCodes,
+            'two_factor_confirmed_at' => now(),
+        ]);
+
+        $request->session()->forget(['2fa_setup_secret', '2fa_setup_recovery_codes']);
 
         $user->activities()->create([
             'action' => 'two_factor_enabled',
@@ -83,7 +135,8 @@ class SecurityController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
-        return back()->with('success', 'Two-factor authentication enabled');
+        return redirect()->route('account.customer.security.index')
+            ->with('success', 'Two-factor authentication has been enabled.');
     }
 
     /**
@@ -91,9 +144,23 @@ class SecurityController extends Controller
      */
     public function disableTwoFactor(Request $request)
     {
+        $request->validate([
+            'password' => 'required|string',
+        ]);
+
         /** @var User $user */
         $user = Auth::user();
-        $user->update(['two_factor_enabled' => false]);
+
+        if (!Hash::check($request->password, $user->password)) {
+            return back()->with('error', 'Incorrect password.');
+        }
+
+        $user->update([
+            'two_factor_enabled' => false,
+            'two_factor_secret' => null,
+            'two_factor_recovery_codes' => null,
+            'two_factor_confirmed_at' => null,
+        ]);
 
         $user->activities()->create([
             'action' => 'two_factor_disabled',
@@ -102,7 +169,7 @@ class SecurityController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
-        return back()->with('success', 'Two-factor authentication disabled');
+        return back()->with('success', 'Two-factor authentication has been disabled.');
     }
 
     /**

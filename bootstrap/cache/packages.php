@@ -1,16 +1,14 @@
 <?php return array (
-  'blade-ui-kit/blade-heroicons' => 
+  'barryvdh/laravel-dompdf' => 
   array (
-    'providers' => 
+    'aliases' => 
     array (
-      0 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
+      'PDF' => 'Barryvdh\\DomPDF\\Facade\\Pdf',
+      'Pdf' => 'Barryvdh\\DomPDF\\Facade\\Pdf',
     ),
-  ),
-  'kirschbaum-development/eloquent-power-joins' => 
-  array (
     'providers' => 
     array (
-      0 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
+      0 => 'Barryvdh\\DomPDF\\ServiceProvider',
     ),
   ),
   'nesbot/carbon' => 
@@ -25,17 +23,6 @@
     'providers' => 
     array (
       0 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    ),
-  ),
-  'ryangjchandler/blade-capture-directive' => 
-  array (
-    'aliases' => 
-    array (
-      'BladeCaptureDirective' => 'RyanChandler\\BladeCaptureDirective\\Facades\\BladeCaptureDirective',
-    ),
-    'providers' => 
-    array (
-      0 => 'RyanChandler\\BladeCaptureDirective\\BladeCaptureDirectiveServiceProvider',
     ),
   ),
 );

@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\Subscription;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -174,7 +175,7 @@ class BillingController extends Controller
     }
 
     /**
-     * Download invoice
+     * Download invoice as PDF
      */
     public function downloadInvoice(Invoice $invoice)
     {
@@ -183,9 +184,17 @@ class BillingController extends Controller
             return redirect()->back()->with('error', 'Unauthorized');
         }
 
-        // Generate or retrieve PDF
-        // For now, just redirect to view
-        return view('customer.billing.invoice-detail', ['invoice' => $invoice]);
+        /** @var User $user */
+        $user = Auth::user();
+
+        $pdf = Pdf::loadView('customer.billing.invoice-pdf', [
+            'invoice' => $invoice,
+            'user' => $user,
+        ]);
+
+        $filename = ($invoice->invoice_number ?? 'INV-' . $invoice->id) . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     /**

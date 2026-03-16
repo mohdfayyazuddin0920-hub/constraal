@@ -19,13 +19,17 @@ use Illuminate\Support\Facades\Route;
 // Guest routes (no authentication required)
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('customer.login');
-    Route::post('/login', [AuthController::class, 'login'])->name('customer.login.post');
+    Route::post('/login', [AuthController::class, 'login'])->name('customer.login.post')->middleware('throttle:5,1');
     Route::get('/signup', [AuthController::class, 'showSignup'])->name('customer.signup');
-    Route::post('/signup', [AuthController::class, 'signup'])->name('customer.signup.post');
+    Route::post('/signup', [AuthController::class, 'signup'])->name('customer.signup.post')->middleware('throttle:5,1');
     Route::get('/reset-password', [AuthController::class, 'showResetPassword'])->name('customer.reset-password');
-    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('customer.reset-password.post');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('customer.reset-password.post')->middleware('throttle:3,1');
     Route::get('/reset-password/confirm', [AuthController::class, 'showNewPassword'])->name('customer.reset-password.confirm');
-    Route::post('/reset-password/confirm', [AuthController::class, 'setNewPassword'])->name('customer.reset-password.confirm.post');
+    Route::post('/reset-password/confirm', [AuthController::class, 'setNewPassword'])->name('customer.reset-password.confirm.post')->middleware('throttle:5,1');
+
+    // 2FA verification (user is authenticated but needs to complete 2FA)
+    Route::get('/2fa/verify', [AuthController::class, 'showTwoFactor'])->name('customer.2fa.verify')->withoutMiddleware('guest');
+    Route::post('/2fa/verify', [AuthController::class, 'verifyTwoFactor'])->name('customer.2fa.verify.post')->middleware('throttle:5,1')->withoutMiddleware('guest');
 });
 
 // Protected routes (authentication required)
@@ -44,6 +48,7 @@ Route::middleware('customer.auth')->group(function () {
     Route::get('/security', [SecurityController::class, 'index'])->name('customer.security.index');
     Route::get('/security/change-password', [SecurityController::class, 'showChangePassword'])->name('customer.security.change-password');
     Route::post('/security/change-password', [SecurityController::class, 'updatePassword'])->name('customer.security.update-password');
+    Route::get('/security/2fa/setup', [SecurityController::class, 'showTwoFactorSetup'])->name('customer.security.2fa-setup');
     Route::post('/security/2fa/enable', [SecurityController::class, 'enableTwoFactor'])->name('customer.security.enable-2fa');
     Route::post('/security/2fa/disable', [SecurityController::class, 'disableTwoFactor'])->name('customer.security.disable-2fa');
     Route::post('/security/logout-other-sessions', [SecurityController::class, 'logoutOtherSessions'])->name('customer.security.logout-other-sessions');

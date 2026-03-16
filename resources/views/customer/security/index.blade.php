@@ -24,15 +24,13 @@
                                     </p>
                                 </div>
                                 @if(!$twoFactorEnabled)
-                                <form method="POST" action="{{ route('account.customer.security.enable-2fa') }}" style="display: inline;">
-                                    @csrf
-                                    <button type="submit" class="btn btn-sm btn-success">Enable</button>
-                                </form>
+                                <a href="{{ route('account.customer.security.2fa-setup') }}" class="btn btn-sm btn-success">
+                                    <i class="bi bi-shield-check"></i> Setup
+                                </a>
                                 @else
-                                <form method="POST" action="{{ route('account.customer.security.disable-2fa') }}" style="display: inline;">
-                                    @csrf
-                                    <button type="submit" class="btn btn-sm btn-warning">Disable</button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#disable2faModal">
+                                    Disable
+                                </button>
                                 @endif
                             </div>
                         </div>
@@ -101,4 +99,32 @@
         </div>
     </div>
 </div>
+
+<!-- Disable 2FA Modal -->
+@if($twoFactorEnabled)
+<div class="modal fade" id="disable2faModal" tabindex="-1" aria-labelledby="disable2faModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ route('account.customer.security.disable-2fa') }}">
+                @csrf
+                <div class="modal-header">
+                    <h5 class="modal-title" id="disable2faModalLabel">Disable Two-Factor Authentication</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Enter your password to confirm disabling two-factor authentication.</p>
+                    <div class="mb-3">
+                        <label class="form-label" for="disable-2fa-password">Password</label>
+                        <input type="password" class="form-control" id="disable-2fa-password" name="password" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Disable 2FA</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 @endsection

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Mail\PasswordResetMail;
 use App\Models\User;
+use App\Support\TwoFactorAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -54,10 +55,20 @@ class AuthController extends Controller
 
         try {
             if (Auth::attempt($credentials)) {
-                $request->session()->regenerate();
-
                 /** @var User|null $user */
                 $user = Auth::user();
+
+                // Check if 2FA is enabled and confirmed
+                if ($user && $user->two_factor_enabled && $user->two_factor_confirmed_at) {
+                    // Store user ID in session and log them out until 2FA is verified
+                    $userId = $user->id;
+                    Auth::logout();
+                    $request->session()->put('2fa_user_id', $userId);
+                    return redirect()->route('account.customer.2fa.verify');
+                }
+
+                $request->session()->regenerate();
+
                 if ($user) {
                     try {
                         $user->activities()->create([
@@ -89,6 +100,93 @@ class AuthController extends Controller
         }
 
         return back()->withErrors(['email' => 'Invalid credentials'])->withInput();
+    }
+
+    /**
+     * Show 2FA verification form
+     */
+    public function showTwoFactor(Request $request)
+    {
+        if (!$request->session()->has('2fa_user_id')) {
+            return redirect()->route('account.customer.login');
+        }
+
+        return view('customer.auth.two-factor');
+    }
+
+    /**
+     * Verify 2FA code during login
+     */
+    public function verifyTwoFactor(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'code' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
+        $userId = $request->session()->get('2fa_user_id');
+        if (!$userId) {
+            return redirect()->route('account.customer.login')
+                ->with('error', 'Session expired. Please log in again.');
+        }
+
+        $user = User::find($userId);
+        if (!$user) {
+            $request->session()->forget('2fa_user_id');
+            return redirect()->route('account.customer.login')
+                ->with('error', 'Account not found.');
+        }
+
+        $code = $request->code;
+        $verified = false;
+
+        // Try TOTP code first
+        if (strlen($code) === 6 && TwoFactorAuth::verify($user->two_factor_secret, $code)) {
+            $verified = true;
+        }
+
+        // Try recovery code if TOTP failed
+        if (!$verified) {
+            $recoveryCodes = $user->two_factor_recovery_codes ?? [];
+            if (!is_array($recoveryCodes)) {
+                $recoveryCodes = json_decode($recoveryCodes, true) ?? [];
+            }
+            $codeUpper = strtoupper(trim($code));
+            if (in_array($codeUpper, $recoveryCodes)) {
+                $verified = true;
+                // Remove used recovery code
+                $recoveryCodes = array_values(array_diff($recoveryCodes, [$codeUpper]));
+                $user->update(['two_factor_recovery_codes' => $recoveryCodes]);
+            }
+        }
+
+        if (!$verified) {
+            return back()->with('error', 'Invalid verification code.');
+        }
+
+        // 2FA verified — complete login
+        $request->session()->forget('2fa_user_id');
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        try {
+            $user->activities()->create([
+                'action' => 'logged_in',
+                'description' => 'User logged in (with 2FA)',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        } catch (Throwable $exception) {
+            Log::warning('Failed to store customer login activity.', [
+                'message' => $exception->getMessage(),
+                'user_id' => $user->id,
+            ]);
+        }
+
+        return redirect()->route('account.customer.dashboard');
     }
 
     /**
