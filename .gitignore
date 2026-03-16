@@ -1,8 +1,8 @@
 /node_modules
 /vendor
 .env
-.env.backup
-.env.production
+.env.*
+!.env.example
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -17,3 +17,9 @@ yarn-error.log
 *.swo
 .DS_Store
 Thumbs.db
+
+# Documentation & specs (not for production)
+*.docx
+*.sql
+server.log
+hostingstart.html
